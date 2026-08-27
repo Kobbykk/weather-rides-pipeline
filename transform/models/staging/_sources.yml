@@ -1,0 +1,10 @@
+version: 2
+
+sources:
+  - name: raw
+    schema: public
+    tables:
+      - name: raw_yellow_trips
+        description: "Raw NYC TLC yellow taxi trips, loaded per month."
+      - name: raw_daily_weather
+        description: "Daily NYC weather from Open-Meteo."

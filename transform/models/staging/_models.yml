@@ -1,0 +1,53 @@
+version: 2
+
+models:
+  - name: stg_trips
+    description: "Cleaned taxi trips, one row per trip."
+    columns:
+      - name: pickup_at
+        description: "Trip start timestamp."
+        data_tests:
+          - not_null
+      - name: pickup_date
+        data_tests:
+          - not_null
+      - name: total_amount
+        description: "Total charged including tip and surcharges."
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: false
+      - name: trip_minutes
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 1
+                max_value: 300
+      - name: payment_type
+        description: >
+          TLC payment code. 0 appears in 2024+ data and is undocumented in the
+          published dictionary; it represents ~4% of trips and is retained.
+          1=credit card, 2=cash, 3=no charge, 4=dispute, 5=unknown, 6=voided.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [0, 1, 2, 3, 4, 5, 6]
+
+  - name: stg_weather
+    description: "Daily NYC weather with a derived condition label."
+    columns:
+      - name: weather_date
+        description: "Calendar date. Grain of this model."
+        data_tests:
+          - unique
+          - not_null
+      - name: weather_condition
+        data_tests:
+          - accepted_values:
+              values: ['dry', 'light_rain', 'heavy_rain', 'snow']
+      - name: temp_max_c
+        data_tests:
+          - dbt_utils.accepted_range:
+              min_value: -30
+              max_value: 50

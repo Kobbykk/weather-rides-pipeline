@@ -1,0 +1,29 @@
+version: 2
+
+models:
+  - name: fct_daily_rides
+    description: >
+      Daily ride volume and economics joined to weather.
+      Grain: one row per calendar date.
+    columns:
+      - name: weather_date
+        data_tests:
+          - unique
+          - not_null
+      - name: trip_count
+        description: "Number of completed trips that day."
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 1000
+              max_value: 500000
+      - name: tipped_share
+        description: "Fraction of trips with a nonzero tip."
+        data_tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 1
+      - name: avg_fare
+        data_tests:
+          - not_null
+
