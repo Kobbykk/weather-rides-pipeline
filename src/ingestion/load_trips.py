@@ -5,7 +5,8 @@ import logging
 import os
 import sys
 from pathlib import Path
-
+import csv
+import io
 import pandas as pd
 import requests
 from dotenv import load_dotenv
@@ -17,6 +18,23 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 log = logging.getLogger("load_trips")
+DDL = """
+CREATE TABLE IF NOT EXISTS raw_yellow_trips (
+    tpep_pickup_datetime   timestamp,
+    tpep_dropoff_datetime  timestamp,
+    passenger_count        double precision,
+    trip_distance          double precision,
+    pulocationid           bigint,
+    dolocationid           bigint,
+    payment_type           bigint,
+    fare_amount            double precision,
+    tip_amount             double precision,
+    total_amount           double precision,
+    source_month           text
+);
+CREATE INDEX IF NOT EXISTS idx_raw_yellow_trips_source_month
+    ON raw_yellow_trips (source_month);
+"""
 
 BASE_URL = "https://d37ci6vzurychx.cloudfront.net/trip-data"
 DATA_DIR = Path(__file__).resolve().parents[2] / "data" / "raw"
@@ -88,20 +106,33 @@ def transform(df: pd.DataFrame, month: str) -> pd.DataFrame:
 
 
 def load(df: pd.DataFrame, engine, month: str) -> None:
-    """Idempotent load: clear this month's rows, then insert."""
-    with engine.begin() as conn:
-        exists = conn.execute(
-            text("SELECT to_regclass(:t)"), {"t": TABLE}
-        ).scalar()
-        if exists:
-            deleted = conn.execute(
-                text(f"DELETE FROM {TABLE} WHERE source_month = :m"), {"m": month}
-            ).rowcount
-            log.info("Removed %s existing rows for %s", f"{deleted:,}", month)
+    """Idempotent load via COPY. Delete and insert share one transaction."""
+    columns = ", ".join(df.columns)
+    copy_sql = f"COPY {TABLE} ({columns}) FROM STDIN WITH (FORMAT csv, NULL '')"
 
-    df.to_sql(TABLE, engine, if_exists="append", index=False, chunksize=CHUNK_SIZE)
-    log.info("Loaded %s rows into %s", f"{len(df):,}", TABLE)
+    raw = engine.raw_connection()
+    try:
+        with raw.cursor() as cur:
+            cur.execute(DDL)
+            cur.execute(f"DELETE FROM {TABLE} WHERE source_month = %s", (month,))
+            log.info("Removed %s existing rows for %s", f"{cur.rowcount:,}", month)
 
+            for start in range(0, len(df), CHUNK_SIZE):
+                buf = io.StringIO()
+                df.iloc[start:start + CHUNK_SIZE].to_csv(
+                    buf, index=False, header=False, na_rep=""
+                )
+                buf.seek(0)
+                cur.copy_expert(copy_sql, buf)
+
+        raw.commit()
+        log.info("Loaded %s rows into %s", f"{len(df):,}", TABLE)
+    except Exception:
+        raw.rollback()
+        log.error("Load failed and was rolled back; table unchanged.")
+        raise
+    finally:
+        raw.close()
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Load NYC taxi trips into Postgres.")

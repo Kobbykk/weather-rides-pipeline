@@ -2,6 +2,7 @@
 
 import argparse
 import calendar
+import io
 import logging
 import os
 import sys
@@ -18,6 +19,17 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 log = logging.getLogger("load_weather")
+DDL = """
+CREATE TABLE IF NOT EXISTS raw_daily_weather (
+    weather_date        date,
+    temperature_2m_max  double precision,
+    temperature_2m_min  double precision,
+    precipitation_sum   double precision,
+    snowfall_sum        double precision,
+    wind_speed_10m_max  double precision,
+    source_month        text
+);
+"""
 
 API_URL = "https://archive-api.open-meteo.com/v1/archive"
 NYC_LAT, NYC_LON = 40.7128, -74.0060
@@ -76,16 +88,28 @@ def extract(month: str) -> pd.DataFrame:
 
 
 def load(df: pd.DataFrame, engine, month: str) -> None:
-    with engine.begin() as conn:
-        if conn.execute(text("SELECT to_regclass(:t)"), {"t": TABLE}).scalar():
-            deleted = conn.execute(
-                text(f"DELETE FROM {TABLE} WHERE source_month = :m"), {"m": month}
-            ).rowcount
-            log.info("Removed %d existing rows for %s", deleted, month)
+    columns = ", ".join(df.columns)
+    copy_sql = f"COPY {TABLE} ({columns}) FROM STDIN WITH (FORMAT csv, NULL '')"
 
-    df.to_sql(TABLE, engine, if_exists="append", index=False)
-    log.info("Loaded %d rows into %s", len(df), TABLE)
+    raw = engine.raw_connection()
+    try:
+        with raw.cursor() as cur:
+            cur.execute(DDL)
+            cur.execute(f"DELETE FROM {TABLE} WHERE source_month = %s", (month,))
+            log.info("Removed %d existing rows for %s", cur.rowcount, month)
 
+            buf = io.StringIO()
+            df.to_csv(buf, index=False, header=False, na_rep="")
+            buf.seek(0)
+            cur.copy_expert(copy_sql, buf)
+
+        raw.commit()
+        log.info("Loaded %d rows into %s", len(df), TABLE)
+    except Exception:
+        raw.rollback()
+        raise
+    finally:
+        raw.close()
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Load NYC daily weather.")
