@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 
 from airflow.sdk import dag
 from airflow.providers.standard.operators.bash import BashOperator
+from airflow.sdk import dag, Param
 
 PROJECT_DIR = "/opt/airflow/project"
 MONTH = "{{ params.month or data_interval_start.strftime('%Y-%m') }}"
@@ -23,7 +24,15 @@ default_args = {
     max_active_runs=1,
     default_args=default_args,
     tags=["portfolio", "elt"],
-    params={"month": "2024-01"},
+    params={
+        "month": Param(
+            default=None,
+            type=["null", "string"],
+            pattern=r"^\d{4}-\d{2}$",
+            title="Month to load",
+            description="Format YYYY-MM, e.g. 2024-05. Leave empty to use the run's own interval.",
+        )
+    },
 )
 def weather_rides_pipeline():
 
