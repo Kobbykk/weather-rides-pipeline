@@ -10,3 +10,10 @@ logs/
 target/
 dbt_packages/
 .user.yml
+
+# Terraform
+infra/.terraform/
+infra/*.tfstate
+infra/*.tfstate.*
+infra/*.tfvars
+!infra/*.tfvars.example
