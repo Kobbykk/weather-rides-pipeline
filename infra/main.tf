@@ -59,3 +59,115 @@ resource "aws_s3_bucket_lifecycle_configuration" "lake" {
     }
   }
 }
+
+resource "aws_glue_catalog_database" "lake" {
+  name        = replace("${var.project_name}_lake", "-", "_")
+  description = "Catalog for NYC taxi trip data in S3."
+}
+
+resource "aws_glue_catalog_table" "trips" {
+  name          = "trips"
+  database_name = aws_glue_catalog_database.lake.name
+  table_type    = "EXTERNAL_TABLE"
+
+  parameters = {
+    classification        = "parquet"
+    "parquet.compression" = "SNAPPY"
+    EXTERNAL              = "TRUE"
+  }
+
+  # Partition keys are NOT stored in the files — they come from the
+  # S3 path. Filtering on these lets Athena skip whole prefixes.
+  partition_keys {
+    name = "year"
+    type = "string"
+  }
+
+  partition_keys {
+    name = "month"
+    type = "string"
+  }
+
+  storage_descriptor {
+    location      = "s3://${aws_s3_bucket.lake.id}/trips/"
+    input_format  = "org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat"
+    output_format = "org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat"
+
+    ser_de_info {
+      serialization_library = "org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe"
+    }
+
+    columns {
+      name = "tpep_pickup_datetime"
+      type = "timestamp"
+    }
+
+    columns {
+      name = "tpep_dropoff_datetime"
+      type = "timestamp"
+    }
+
+    columns {
+      name = "passenger_count"
+      type = "double"
+    }
+
+    columns {
+      name = "trip_distance"
+      type = "double"
+    }
+
+    columns {
+      name = "pulocationid"
+      type = "bigint"
+    }
+
+    columns {
+      name = "dolocationid"
+      type = "bigint"
+    }
+
+    columns {
+      name = "payment_type"
+      type = "bigint"
+    }
+
+    columns {
+      name = "fare_amount"
+      type = "double"
+    }
+
+    columns {
+      name = "tip_amount"
+      type = "double"
+    }
+
+    columns {
+      name = "total_amount"
+      type = "double"
+    }
+  }
+}
+
+resource "aws_athena_workgroup" "main" {
+  name = var.project_name
+
+  configuration {
+    enforce_workgroup_configuration    = true
+    publish_cloudwatch_metrics_enabled = true
+
+    result_configuration {
+      output_location = "s3://${aws_s3_bucket.lake.id}/athena-results/"
+
+      encryption_configuration {
+        encryption_option = "SSE_S3"
+      }
+    }
+
+    # Hard cap: any single query scanning more than 1 GB is killed.
+    # This is the guardrail that makes a runaway bill impossible.
+    bytes_scanned_cutoff_per_query = 1073741824
+  }
+
+  force_destroy = true
+}
