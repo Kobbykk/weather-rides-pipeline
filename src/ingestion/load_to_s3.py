@@ -48,8 +48,6 @@ def transform(df: pd.DataFrame, month: str) -> pd.DataFrame:
         & (df["tpep_pickup_datetime"] < df["tpep_dropoff_datetime"])
     ]
 
-   
-
     log.info("Kept %s of %s rows", f"{len(df):,}", f"{before:,}")
     return df
 

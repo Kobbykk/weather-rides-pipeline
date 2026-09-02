@@ -100,8 +100,12 @@ def transform(df: pd.DataFrame, month: str) -> pd.DataFrame:
     ]
     df["source_month"] = month
 
-    log.info("Kept %s of %s rows (%.1f%% dropped)",
-             f"{len(df):,}", f"{before:,}", 100 * (1 - len(df) / before))
+    log.info(
+        "Kept %s of %s rows (%.1f%% dropped)",
+        f"{len(df):,}",
+        f"{before:,}",
+        100 * (1 - len(df) / before),
+    )
     return df
 
 
@@ -119,7 +123,7 @@ def load(df: pd.DataFrame, engine, month: str) -> None:
 
             for start in range(0, len(df), CHUNK_SIZE):
                 buf = io.StringIO()
-                df.iloc[start:start + CHUNK_SIZE].to_csv(
+                df.iloc[start : start + CHUNK_SIZE].to_csv(
                     buf, index=False, header=False, na_rep=""
                 )
                 buf.seek(0)
@@ -133,6 +137,7 @@ def load(df: pd.DataFrame, engine, month: str) -> None:
         raise
     finally:
         raw.close()
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Load NYC taxi trips into Postgres.")

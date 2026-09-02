@@ -111,6 +111,7 @@ def load(df: pd.DataFrame, engine, month: str) -> None:
     finally:
         raw.close()
 
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Load NYC daily weather.")
     parser.add_argument("--month", required=True, help="Month to load, e.g. 2024-01")
