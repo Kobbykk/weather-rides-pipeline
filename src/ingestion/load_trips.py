@@ -1,12 +1,12 @@
 """Extract NYC TLC yellow taxi trips and load them into Postgres."""
 
 import argparse
+import io
 import logging
 import os
 import sys
 from pathlib import Path
-import csv
-import io
+
 import pandas as pd
 import requests
 from dotenv import load_dotenv

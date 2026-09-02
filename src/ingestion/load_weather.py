@@ -11,7 +11,7 @@ from datetime import date
 import pandas as pd
 import requests
 from dotenv import load_dotenv
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 
 logging.basicConfig(
     level=logging.INFO,
